@@ -51,6 +51,21 @@ export function calculateDiscountedAmount(
 ): string {
     const base = parseFloat(baseAmount)
     const discount = parseFloat(discountPercentage)
+
+    // Validate discount percentage is within acceptable range (0-100)
+    if (Number.isNaN(discount) || discount < 0 || discount > 100) {
+        throw new Error(
+            `Invalid discount percentage: ${discountPercentage}. Must be between 0 and 100.`
+        )
+    }
+
+    // Validate base amount is a positive number
+    if (Number.isNaN(base) || base < 0) {
+        throw new Error(
+            `Invalid base amount: ${baseAmount}. Must be a positive number.`
+        )
+    }
+
     const discounted = base * (1 - discount / 100)
     return discounted.toFixed(2)
 }

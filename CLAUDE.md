@@ -55,21 +55,48 @@ src/app/dashboard/volleyball-profile/
 Actions return `{ status: boolean; message: string; data?: T }`. After successful mutations, client components call `router.refresh()` to update server component data.
 
 ### Admin Authorization
-No middleware — authorization is checked per-action. Admin routes use a `checkAdminAccess()` helper that verifies `users.role` is `"admin"` or `"director"`. Admin actions log to audit_log via `logAuditEntry()` from `src/lib/audit-log.ts`. Admin sections are conditionally rendered in the sidebar.
+Authorization is checked per-action using centralized helpers from `src/lib/auth-checks.ts`:
+- **`checkAdminAccess()`** — Returns boolean if user has admin/director role
+- **`requireAdminAccess()`** — Throws error if unauthorized, logs failed attempts to audit_log
+- **`requireAuth()`** — Throws error if not authenticated
+- **`getCurrentSession()`** — Returns current session or null
+
+Admin pages check access at page level and redirect to `/dashboard` if denied. Admin actions check access before mutations. Admin sections are conditionally rendered in the sidebar using `getIsAdminOrDirector()` helper.
+
+### Audit Logging
+Comprehensive audit logging system in `src/lib/audit-log.ts`:
+- **`logAuditEntry()`** — General purpose audit logging for admin actions
+- **`logAuthorizationFailure()`** — Logs failed admin access attempts
+- **`logAuthenticationFailure()`** — Logs failed login attempts
+- **`logPaymentFailure()`** — Logs failed payment transactions
+- **`logSecurityEvent()`** — Logs security events (rate limiting, suspicious activity)
+
+All admin mutations (create, update, delete) should call `logAuditEntry()` with userId, action, entityType, entityId, and summary. Failed authorization attempts are automatically logged by `requireAdminAccess()`.
 
 ### Site Config System
 Dynamic configuration stored in the `site_config` database table (key-value pairs). Managed at `/dashboard/site-config`. Controls: season pricing, late pricing dates, max players, registration open/closed, tryout/season/playoff dates. Access via helpers in `src/lib/site-config.ts` (`getSeasonConfig()`, `getCurrentSeasonAmount()`, `checkSignupEligibility()`).
 
 ### Integrations
-- **Square** — Payment processing for season fees. Server-side via `square` SDK in `src/app/dashboard/pay-season/actions.ts`. Client-side tokenization via `react-square-web-payments-sdk`. Discount system in `src/lib/discount.ts`.
+- **Square** — Payment processing for season fees. Server-side via `square` SDK in `src/app/dashboard/pay-season/actions.ts`. Client-side tokenization via `react-square-web-payments-sdk`. Discount system in `src/lib/discount.ts` validates percentages (0-100%) and amounts.
 - **Resend** — Transactional emails (password reset, signup confirmation). Configured in `src/lib/auth.ts` and pay-season actions. Site email config in `src/config/site.ts`.
 
+### Security
+- **Rate Limiting** — Proxy handler in `src/proxy.ts` implements in-memory rate limiting: 5 req/min for auth endpoints, 5 req/hour for payment endpoints, 100 req/min for general API. For production with multiple instances, migrate to Upstash Ratelimit.
+- **Security Headers** — Configured in `next.config.ts`: X-Frame-Options (DENY), X-Content-Type-Options (nosniff), Referrer-Policy, X-XSS-Protection, Permissions-Policy
+- **Password Requirements** — Minimum 12 characters (configured in `src/lib/auth.ts`)
+- **Environment Validation** — Database connection validates DATABASE_URL exists at startup (`src/database/db.ts`)
+- **Authentication** — All server actions that access user data must check `session?.user`. Use centralized helpers from `src/lib/auth-checks.ts`.
+- **SQL Injection Protection** — Drizzle ORM uses parameterized queries exclusively
+- **CSRF Protection** — Handled by better-auth and Next.js server actions
+
 ### Key Patterns
-- Use `auth.api.getSession({ headers: await headers() })` to get session in server components/actions
-- Import `@/*` paths map to `./src/*`
-- UI components from shadcn/ui in `src/components/ui/`
-- Layout components in `src/components/layout/`
-- Forms primarily use controlled components with `useState`, not react-hook-form
+- **Authentication** — Use `getCurrentSession()` from `@/lib/auth-checks` instead of calling `auth.api.getSession()` directly
+- **Authorization** — Import `checkAdminAccess()` or `requireAdminAccess()` from `@/lib/auth-checks` for admin-only actions
+- **Audit Logging** — Call appropriate logging functions from `@/lib/audit-log` for all admin mutations and security events
+- **Import Paths** — `@/*` maps to `./src/*`
+- **UI Components** — shadcn/ui components in `src/components/ui/`
+- **Layout Components** — Shared layouts in `src/components/layout/`
+- **Forms** — Primarily use controlled components with `useState`, not react-hook-form
 
 ### Formatting
 - Biome linter with 4-space indentation

@@ -18,21 +18,15 @@ import {
 import { eq, and } from "drizzle-orm"
 import { getSeasonConfig } from "@/lib/site-config"
 import { logAuditEntry } from "@/lib/audit-log"
-
-async function checkAdminAccess(): Promise<boolean> {
-    const session = await auth.api.getSession({ headers: await headers() })
-    if (!session) return false
-
-    const [user] = await db
-        .select({ role: users.role })
-        .from(users)
-        .where(eq(users.id, session.user.id))
-        .limit(1)
-
-    return user?.role === "admin" || user?.role === "director"
-}
+import { checkAdminAccess } from "@/lib/auth-checks"
 
 export async function getUsers(): Promise<{ id: string; name: string }[]> {
+    // Require admin access to prevent unauthorized access to user list
+    const hasAccess = await checkAdminAccess()
+    if (!hasAccess) {
+        return []
+    }
+
     const allUsers = await db
         .select({
             id: users.id,

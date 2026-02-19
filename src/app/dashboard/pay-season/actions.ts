@@ -165,6 +165,12 @@ export async function fetchSeasonConfig(): Promise<SeasonConfig> {
 }
 
 export async function getUsers(): Promise<{ id: string; name: string }[]> {
+    // Require authentication to prevent unauthorized access to user list
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) {
+        return []
+    }
+
     const allUsers = await db
         .select({
             id: users.id,

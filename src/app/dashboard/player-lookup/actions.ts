@@ -1,7 +1,5 @@
 "use server"
 
-import { auth } from "@/lib/auth"
-import { headers } from "next/headers"
 import { db } from "@/database/db"
 import {
     users,
@@ -12,6 +10,7 @@ import {
     divisions
 } from "@/database/schema"
 import { eq, desc } from "drizzle-orm"
+import { checkAdminAccess } from "@/lib/auth-checks"
 
 export interface PlayerListItem {
     id: string
@@ -74,19 +73,6 @@ export interface PlayerDraftHistory {
     teamName: string
     round: number
     overall: number
-}
-
-async function checkAdminAccess(): Promise<boolean> {
-    const session = await auth.api.getSession({ headers: await headers() })
-    if (!session) return false
-
-    const [user] = await db
-        .select({ role: users.role })
-        .from(users)
-        .where(eq(users.id, session.user.id))
-        .limit(1)
-
-    return user?.role === "admin" || user?.role === "director"
 }
 
 export async function getPlayersForLookup(): Promise<{
